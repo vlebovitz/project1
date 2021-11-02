@@ -19,15 +19,19 @@ tidy=TRUE, tidy.opts=list(width.cutoff=60), R.options=list(max.print=100))
 
 ## Data Wrangling, Exploration, Visualization
 
-### Name and EID here
+### Vincent Lebovitz vjl369
 
 #### Introduction 
 
-Paragraph or two introducing your datasets and variables, why they are interesting to you, etc.
+For the first portion of the project, I will be analyzing two large datasets. The first being a very in depth and detailed description of sommelier wines from different geographic locations, and their respective ratings with other informative metrics (price,point ranking, sommelier taster, winery, and origin). The second dataset includes happiness scores from every country around the world based on certain metrics such as happiness score, economy, health, and many more. As someone who is of legal age and enjoys to occasionally drink wine (also watched an amazing documentary called sommelier) I would like to see if higher wine scores in different regions pertains to happiness.
 
 ```{R}
+library(tidyverse)
 # read your datasets in here, e.g., with read_csv()
-
+wine <- read_csv("wine.csv")
+happiness <- read_csv("happiness.csv")
+glimpse(wine)
+glimpse(happiness)
 ```
 
 #### Tidying: Reshaping
@@ -36,6 +40,21 @@ If your datasets are tidy already, demonstrate that you can reshape data with pi
 
 ```{R}
 # your tidying code (if applicable; can also wait until wrangling section)
+#due to my data being rather tidy I will perform a methodology of untidying and tidying
+
+#I will make the region untidy by creating one column and separating regions by a column
+#Thus, I will wait until the wrangling section to reshape my data
+wine <- wine %>% pivot_longer(
+    8:9,
+   names_to = "region",
+  names_prefix = "region_",
+   values_to = "region type"
+ )
+#Separate the first and last names of sommeliers for easier readability
+wine <- wine %>% separate(col=taster_name,into=c("First Name","Last Name"),sep=" ")
+
+
+
 ```
 
     
@@ -43,20 +62,52 @@ If your datasets are tidy already, demonstrate that you can reshape data with pi
 
 ```{R}
 # your joining code
+#display the dimensions for the wine and happiness dataset
+wine %>% dim()
+happiness %>% dim()
 
+#join the two datasets with inner_join
+joinedData <- wine %>% inner_join(happiness,by=c("country"="Country"))
+joinedData %>% dim()
+joinedData %>% summarize_all(n_distinct)
 # your joining code
+#find the rows in wine which didn't have a match in happiness by country
+wine %>% anti_join(happiness,by=c("country"="Country"))
+
 ```
 
-Discussions of joining here. Feel encouraged to break up into more than once code chunk and discuss each in turn.
+Simply put, I am inner joining the two datasets on a country basis which will remove any values which don't have a match in countries from either dataset. This will allow me to accurately compare the countries which were represented in both datasets, and not have any countries describe their associated happiness metrics. After joining, one can see that that the dimensions for the dataset are 150660 rows by 26 columns. The dimensions for wine and happiness are seen above. Wine has apprxoimately 109,282 rows which didn't appear in the happiness dataset
 
 ####  Wrangling
 
 ```{R}
-# your wrangling code
+#Use pivot wider to tidy data back into region1 and region2 for easier readibility, and more in depth analysis
+joinedData <- joinedData %>% pivot_wider(names_from=region,values_from=`region type`,names_prefix="region_")
 
 # your wrangling code
-
+# Aggregate the countries with perfect wine rating scores from the joined dataset
+joinedData %>% group_by(title,country) %>% filter(points == 100) %>% select(title,points,country) %>% arrange(desc(points))
+#Aggregate the number of wine varieties
+joinedData %>% group_by(variety) %>% summarize(n())
+#Find the maximum price of wine in descending order
+joinedData %>% group_by(title) %>% select(title,price) %>% arrange(desc(price)) 
 # your wrangling code
+#find the average value for points of wine
+joinedData %>% summarize(meanPoints=mean(points))
+
+#calculate the standard deviation and standard error for the price of wine on a country basis
+joinedData %>% group_by(country) %>% summarize(mean=mean(price,na.rm=T), n=n(), sd=sd(price,na.rm=T), se=sd/sqrt(n)) 
+#Create a new column to determine the tier of wine based on points scale
+joinedData <- joinedData %>% mutate(wineTier = ifelse(points>95, "high", ifelse(points<=95 & 50<=points, "med", "low")))
+#Find the highest priced variety of wines for the dataset
+joinedData %>% group_by(variety) %>% summarize(meanPrice=mean(price,na.rm=T)) %>% arrange(desc(meanPrice)) %>% slice(1:10)
+# your wrangling code
+#Use sentiment analysis to properly format the description key words
+joinedData %>% mutate(description=str_remove_all(description,"&.*;,0123456789")) %>% unnest_tokens(word,description) -> wine_words
+stop_words %>% filter(lexicon=="snowball") -> mystops
+anti_join(wine_words,mystops) -> wine_words_clean
+glimpse(wine_words_clean)
+
 ```
 
 Your discussion of wrangling section here. Feel encouraged to break up into more than once code chunk and discuss each in turn.
@@ -66,25 +117,41 @@ Your discussion of wrangling section here. Feel encouraged to break up into more
 
 ```{R}
 # your plot 1
+#Create a bar graph based on the countries with the number of highest wine ratings on a per country basis
+joinedData %>% group_by(country) %>% filter(wineTier == "high") %>% summarize(countryCount=n()) %>% ggplot(aes(country,countryCount,fill=country))+ geom_bar(stat="identity") + xlab("Country") +ylab("Count") +ggtitle("Countries based on Highest Quality Wine Ratings")+scale_y_continuous(breaks=seq(0,300,25)) + theme_bw()
+#Create a bar graph based on the sentiment of sommelier reviews for wine descriptions
+wine_words_clean %>% group_by(word) %>% summarize(n=n()) %>% arrange(desc(n)) %>% slice(1:10) %>% ggplot(aes(word,n))+geom_bar(stat="identity")+ scale_colour_brewer(palette = "Accent")+ xlab("Most Used Sommelier Terms") +ylab("Usage in Descriptions") +ggtitle("The Ten Most Used Terms by Sommeliers and their Frequencies")+scale_y_continuous(breaks=seq(10000,50000,5000))+theme_minimal() 
+#Find the average prices for different varieties of wine
+joinedData %>% group_by(variety) %>% summarize(meanPrice=mean(price,na.rm=T)) %>% arrange(desc(meanPrice)) %>% slice(1:8) %>% ggplot(aes(x = variety, y = meanPrice,fill=variety))+
+    geom_bar(stat="summary",fun=mean)+
+    geom_errorbar(stat="summary", fun.data=mean_se)
 ```
 
-Your discussion of plot 1
+This plot is a bar graph representing the number of perfect score wines on a country by country basis. From this plot we can see that France represents a large portion of these perfect scores for wine with Italy coming in second and Portugal in third. The second bar graphs uses our sentiment analysis dataset to show us the most used words by sommeliers in their descriptions of wine. Obviously, wine is the number one used word with flavors, fruit,aromas, and palate trailing behind. This gives us an idea into how many of these wines are described by those across the world when looking at a wine. 
 
 ```{R}
 # your plot 2
+#Most common words used by sommeliers
+#joinedData %>%  ggplot(aes(points,price,color=country))+geom_point()+ xlab("Wine Score (points)") +ylab("Price of Wine") +ggtitle("Wine Rating versus Price on a Country Basis") 
+
+joinedData %>% group_by(`Happiness Rank`,country) %>% filter(`Happiness Rank` < 25) %>% select(country,`Happiness Rank`,points,price) %>% ggplot(aes(points,price,color=country)) +xlab("Wine Ratings") +ylab("Price of Wine") +ggtitle("Wine Ratings versus Price on a Country Basis")+geom_point(alpha=0.9)+ theme_classic()
+
 ```
 
-Your discussion of plot 2
+This plot allows us to see on a country by country basis if there's any relation between the wine rating and its price. After completing a geom_smooth test, I noticed the points were not accurately producing linear relationships, so as a result we are unable to determine if this is such. From this plot, however, we can see that Australia has a great spread of wines in both the x and y axis along with Austria. Additionally, Austria as a major outlier with the most expensive wine. 
 
 ```{R}
 # your plot 3
-```
+joinedData %>% ggplot(aes(points,`Happiness Score`)) +
+geom_density2d_filled(alpha=.6) + xlab("Wine Ratings") +ylab("Happiness of Countries") +ggtitle("Density Visualisations of Wine Ratings versus Happiness Scores") +theme_minimal()
+  #use width and height to create vertical and horizontal noise
 
-Your discussion of plot 3
+```
+Plot three shows a density distribution for Wine Ratings versus Happiness levels of different countries. From this plot, we can see that the most common set of values are occuring in the regions of yellow. For example a wine rating of 86 with a happiness level of 6.6 is seen many times throughout the dataset. We are hoping to see if there's a certain trend which follows the higher the wine rating the greater the happiness and vice versa, and from this we can see a slight depiction of this trend from the higher density points. Further analysis is necessary to complete such.
 
 #### Concluding Remarks
 
-If any!
+Overall, the wine dataset proved to be a very valuable and extensive resource to compute descriptive statistics and further my knowledge in this subject matter. I find it very interesting the world of wine, and although we can't confirm it has a direct impact on happiness in a country, it's certainly a minor factor in creased GDP, econoomy, which plays pivotal roles in human happiness within a country.
 
 
 

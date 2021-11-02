@@ -81,6 +81,7 @@ Simply put, I am inner joining the two datasets on a country basis which will re
 ####  Wrangling
 
 ```{R}
+library(tidytext)
 #Use pivot wider to tidy data back into region1 and region2 for easier readibility, and more in depth analysis
 joinedData <- joinedData %>% pivot_wider(names_from=region,values_from=`region type`,names_prefix="region_")
 
@@ -124,7 +125,7 @@ wine_words_clean %>% group_by(word) %>% summarize(n=n()) %>% arrange(desc(n)) %>
 #Find the average prices for different varieties of wine
 joinedData %>% group_by(variety) %>% summarize(meanPrice=mean(price,na.rm=T)) %>% arrange(desc(meanPrice)) %>% slice(1:8) %>% ggplot(aes(x = variety, y = meanPrice,fill=variety))+
     geom_bar(stat="summary",fun=mean)+
-    geom_errorbar(stat="summary", fun.data=mean_se)
+    geom_errorbar(stat="summary", fun.data=mean_se)+xlab("Wine Varieties") +ylab("Average Price") +ggtitle("Average Wine Prices Based on Variety")
 ```
 
 This plot is a bar graph representing the number of perfect score wines on a country by country basis. From this plot we can see that France represents a large portion of these perfect scores for wine with Italy coming in second and Portugal in third. The second bar graphs uses our sentiment analysis dataset to show us the most used words by sommeliers in their descriptions of wine. Obviously, wine is the number one used word with flavors, fruit,aromas, and palate trailing behind. This gives us an idea into how many of these wines are described by those across the world when looking at a wine. 
